@@ -1,0 +1,69 @@
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
+const express = require('express');
+
+const app = express();
+const port = 3000;
+
+// تهيئة العميل
+const client = new Client({
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    }
+});
+
+// توليد QR code للاتصال
+client.on('qr', (qr) => {
+    console.log('QR code received, scan it with your phone!');
+    qrcode.generate(qr, { small: true });
+});
+
+// عند الاتصال بنجاح
+client.on('ready', () => {
+    console.log('Client is ready!');
+});
+
+// عند استقبال رسالة
+client.on('message', async (msg) => {
+    const chat = await msg.getChat();
+    const contact = await msg.getContact();
+    
+    console.log(`Message from ${contact.pushname}: ${msg.body}`);
+    
+    // الرد على الرسائل تلقائياً
+    if (msg.body.toLowerCase() === 'hello') {
+        msg.reply('Hello! How can I help you today?');
+    } else if (msg.body.toLowerCase() === 'time') {
+        const now = new Date();
+        msg.reply(`Current time is: ${now.toLocaleTimeString()}`);
+    } else if (msg.body.toLowerCase() === 'info') {
+        msg.reply(`You are: ${contact.pushname}\nChat is: ${chat.name}`);
+    }
+    
+    // يمكنك إضافة المزيد من الأوامر هنا
+});
+
+// تهيئة واجهة API
+app.use(express.json());
+
+app.post('/send-message', async (req, res) => {
+    const { number, message } = req.body;
+    
+    try {
+        // التأكد من أن الرقم يحتوي على رمز الدولة
+        const chatId = number.includes('@c.us') ? number : `${number}@c.us`;
+        await client.sendMessage(chatId, message);
+        res.json({ success: true, message: 'Message sent successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.listen(port, () => {
+    console.log(`API server running on port ${port}`);
+});
+
+// تهيئة العميل
+client.initialize();
